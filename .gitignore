@@ -4,3 +4,7 @@
 *.o
 *.py~
 *.py.swp
+
+# Build files
+amp_atomistics.egg-info/
+build/

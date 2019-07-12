@@ -283,7 +283,8 @@ class LossFunction:
     default_parameters = {'convergence': {'energy_rmse': 0.001,
                                           'energy_maxresid': None,
                                           'force_rmse': None,
-                                          'force_maxresid': None, }
+                                          'force_maxresid': None,
+                                          'max_steps': np.inf, }
                           }
 
     def __init__(self, energy_coefficient=1.0, force_coefficient=0.04,
@@ -445,6 +446,7 @@ class LossFunction:
             log('  energy_maxresid: ' + str(convergence['energy_maxresid']))
             log('  force_rmse: ' + str(convergence['force_rmse']))
             log('  force_maxresid: ' + str(convergence['force_maxresid']))
+            log('  max_steps: ' + str(convergence['max_steps']))
             log(' Loss function set-up:')
             log('  energy_coefficient: ' + str(p.energy_coefficient))
             log('  force_coefficient: ' + str(p.force_coefficient))
@@ -843,12 +845,16 @@ class LossFunction:
         p = self.parameters
         images = self._model.trainingparameters.images
         energy_rmse_converged = True
+        energy_maxresid_converged = True
         log = self._model.log
+        if p.convergence['max_steps'] < self._step:
+            self._step = 0
+            converged = True
+            return converged
         if p.convergence['energy_rmse'] is not None:
             energy_rmse = np.sqrt(energy_loss / len(images))
             if energy_rmse > p.convergence['energy_rmse']:
                 energy_rmse_converged = False
-        energy_maxresid_converged = True
         if p.convergence['energy_maxresid'] is not None:
             if energy_maxresid > p.convergence['energy_maxresid']:
                 energy_maxresid_converged = False
