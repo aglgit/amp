@@ -387,6 +387,40 @@ class Amp(Calculator, object):
                                            'training. See log file for'
                                            ' more information.')
 
+    def train_return_loss(self,
+                          images,
+                          ):
+
+        log = self._log
+        log('\nAmp training started. ' + now() + '\n')
+        log('Descriptor: %s\n  (%s)' % (self.descriptor.__class__.__name__,
+                                        self.descriptor))
+        log('Model: %s\n  (%s)' % (self.model.__class__.__name__, self.model))
+
+        images = hash_images(images, log=log)
+
+        log('\nDescriptor\n==========')
+        train_forces = self.model.forcetraining  # True / False
+        check_images(images, forces=train_forces)
+        self.descriptor.calculate_fingerprints(
+                images=images,
+                parallel=self._parallel,
+                log=log,
+                calculate_derivatives=train_forces)
+
+        log('\nModel fitting\n=============')
+        result = self.model.fit(trainingimages=images,
+                                descriptor=self.descriptor,
+                                log=log,
+                                parallel=self._parallel)
+        loss, energy_rmse, force_rmse = self.model.lossfunction.loss, \
+                                        self.model.lossfunction.energy_loss, \
+                                        self.model.lossfunction.force_loss
+        self.reset()  # Clears any calculation results.
+
+        return loss, energy_rmse, force_rmse
+
+
     def save(self, filename, overwrite=False):
         """Saves the calculator in a way that it can be re-opened with
         load.
