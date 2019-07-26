@@ -16,6 +16,7 @@ from getpass import getuser
 from ase import io as aseio
 from ase.db import connect
 from ase.calculators.calculator import PropertyNotImplementedError
+from numpy import inf
 try:
     import cPickle as pickle    # Python2
 except ImportError:

@@ -587,6 +587,126 @@ def calc_rmse(calc_paths,
     return data
 
 
+def calculate_rmses(calc_path,
+               images,
+               dblabel=None,
+               energy_coefficient=1.0,
+               force_coefficient=1.0,
+              ):
+    from amp.model import LossFunction
+
+    calc = Amp.load(calc_path, dblabel=dblabel)
+    # Setting the convergence is a kludgy way to keep LossFunction.__init__()
+    # from resetting the force_coefficient to 0
+    convergence = {'energy_rmse': 1e-16, 'force_rmse': 1e-16}
+
+    calc._log('\nAmp calculate_rmses started. ' + now() + '\n')
+    calc._log('Descriptor: %s' % calc.descriptor.__class__.__name__)
+    calc._log('Model: %s' % calc.model.__class__.__name__)
+
+    images = hash_images(images)
+
+    calc._log('\nDescriptor\n==========')
+    calc.descriptor.calculate_fingerprints(
+        images=images,
+        parallel=calc._parallel,
+        log=calc._log,
+        calculate_derivatives=True)
+    
+    lossfunction = LossFunction(energy_coefficient=energy_coefficient,
+                                force_coefficient=force_coefficient,
+                                parallel=calc._parallel,
+                                raise_ConvergenceOccurred=False,
+                                convergence=convergence,
+                                )
+    calc.model.lossfunction = lossfunction
+    calc.model.lossfunction.attach_model(
+            calc.model,
+            log=calc._log,
+            fingerprints=calc.descriptor.fingerprints,
+            fingerprintprimes=calc.descriptor.fingerprintprimes,
+            images=images)
+
+    vector = calc.model.vector.copy()
+    results = calc.model.lossfunction.get_loss(
+                  vector,
+                  lossprime=True)
+
+    calc._log('Finished calculating RMSE on validation set')
+
+    data = results
+    data["energy_rmse"] = np.sqrt(data["energy_loss"] / len(images))
+    data["force_rmse"] = np.sqrt(data["force_loss"] / len(images))
+
+    return data
+
+
+def calculate_error(calc_path,
+                    images,
+                    dblabel=None,
+                    ):
+    calc = Amp.load(calc_path, dblabel=dblabel)
+    calc._log('\nAmp calculate_error started. ' + now() + '\n')
+    calc._log('Descriptor: %s' % calc.descriptor.__class__.__name__)
+    calc._log('Model: %s' % calc.model.__class__.__name__)
+
+    images = hash_images(images, log=calc._log)
+
+    calc._log('\nDescriptor\n==========')
+    calc.descriptor.calculate_fingerprints(
+        images=images,
+        parallel=calc._parallel,
+        log=calc._log,
+        calculate_derivatives=True)
+
+    keys = list(images.keys())
+    num_images = len(images)
+    num_atoms = len(images[keys[0]])
+    energy_exact = np.zeros(num_images)
+    energy_amp = np.zeros(num_images)
+    force_exact = np.zeros((num_images, 3 * num_atoms))
+    force_amp = np.zeros((num_images, 3 * num_atoms))
+    energy_diff = np.zeros(num_images)
+    force_diff = np.zeros((num_images, 3 * num_atoms))
+
+    energy_rmse = 0.0
+    force_rmse = 0.0
+    for i, (hash, image) in enumerate(images.items()):
+        energy_args = dict(
+            fingerprints=calc.descriptor.fingerprints[hash]
+        )
+
+        energy_amp[i] = calc.model.calculate_energy(**energy_args)
+        energy_exact[i] = image.get_potential_energy(apply_constraint=False)
+
+        forces_args = dict(
+            fingerprints=calc.descriptor.fingerprints[hash],
+            fingerprintprimes=calc.descriptor.fingerprintprimes[hash]
+        )
+
+        force_amp[i] = calc.model.calculate_forces(**forces_args).reshape(-1)
+        force_exact[i] = image.get_forces(apply_constraint=False).reshape(-1)
+
+        energy_diff[i] = abs(energy_amp[i] - energy_exact[i])
+        force_diff[i] = abs(force_amp[i] - force_exact[i])
+        energy_rmse += np.sum((energy_amp[i] - energy_exact[i]) ** 2)
+        force_rmse += np.sum((force_amp[i] - force_exact[i]) ** 2)
+
+    energy_rmse = np.sqrt(energy_rmse / num_images)
+    force_rmse = np.sqrt(force_rmse / (num_images * num_atoms))
+    force_exact = force_exact.reshape(-1)
+    force_diff = force_diff.reshape(-1)
+
+    return (
+        energy_rmse,
+        force_rmse,
+        energy_exact,
+        energy_diff,
+        force_exact,
+        force_diff,
+    )
+
+
 def read_trainlog(logfile, verbose=True, multiple=0):
     """Reads the log file from the training process, returning the relevant
     parameters.
