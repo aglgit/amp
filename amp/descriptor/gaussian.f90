@@ -2,7 +2,7 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
        subroutine calculate_g2(neighbornumbers, neighborpositions, &
-       g_number, g_eta, p_gamma, rc, cutofffn_code, ri, num_neighbors, ridge)
+       g_number, g_eta, center, p_gamma, rc, cutofffn_code, ri, num_neighbors, ridge)
 
               use cutoffs
               implicit none
@@ -12,13 +12,13 @@
               double precision, dimension(num_neighbors, 3):: &
               neighborpositions
               double precision, dimension(3):: ri
-              double precision::  g_eta, rc
+              double precision::  g_eta, center, rc
               ! gamma parameter for the polynomial cutoff
               double precision, optional:: p_gamma
               integer:: cutofffn_code
               double precision:: ridge
 !f2py         intent(in):: neighbornumbers, neighborpositions, g_number
-!f2py         intent(in):: g_eta, rc, ri, p_gamma
+!f2py         intent(in):: g_eta, center, rc, ri, p_gamma
 !f2py         intent(hide):: num_neighbors
 !f2py         intent(out):: ridge
               integer:: j, match, xyz
@@ -34,7 +34,7 @@
                       neighborpositions(j, xyz) - ri(xyz)
                     end do
                     Rij = sqrt(dot_product(Rij_vector, Rij_vector))
-                    term = exp(-g_eta*(Rij**2.0d0) / (rc ** 2.0d0))
+                    term = exp(-g_eta*((Rij - center)**2.0d0) / (rc ** 2.0d0))
                     if (present(p_gamma)) then
                         term = term * cutoff_fxn(Rij, rc, &
                             cutofffn_code, p_gamma)
@@ -266,7 +266,7 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
        subroutine calculate_g2_prime(neighborindices, neighbornumbers, &
-       neighborpositions, g_number, g_eta, rc, cutofffn_code, i, ri, m, l, &
+       neighborpositions, g_number, g_eta, center, rc, cutofffn_code, i, ri, m, l, &
        num_neighbors, ridge, p_gamma)
 
               use cutoffs
@@ -279,14 +279,14 @@
               neighborpositions
               double precision, dimension(3):: ri, Rj
               integer:: m, l, i
-              double precision::  g_eta, rc
+              double precision::  g_eta, center, rc
               ! gamma parameter for the polynomial cutoff
               double precision, optional:: p_gamma
               integer:: cutofffn_code
               double precision:: ridge
 !f2py         intent(in):: neighborindices, neighbornumbers
 !f2py         intent(in):: neighborpositions, g_number
-!f2py         intent(in):: g_eta, rc, i, ri, m, l, p_gamma
+!f2py         intent(in):: g_eta, center, rc, i, ri, m, l, p_gamma
 !f2py         intent(hide):: num_neighbors
 !f2py         intent(out):: ridge
               integer:: j, match, xyz
@@ -307,18 +307,18 @@
                         Rij = sqrt(dot_product(Rij_vector, Rij_vector))
 
                         if (present(p_gamma)) then
-                            term1 = - 2.0d0 * g_eta * Rij * &
+                            term1 = - 2.0d0 * g_eta * (Rij - center) * &
                             cutoff_fxn(Rij, rc, cutofffn_code, p_gamma) / &
                             (rc ** 2.0d0) + cutoff_fxn_prime(Rij, rc, &
                             cutofffn_code, p_gamma)
                         else
-                            term1 = - 2.0d0 * g_eta * Rij * &
+                            term1 = - 2.0d0 * g_eta * (Rij - center) * &
                             cutoff_fxn(Rij, rc, cutofffn_code) / &
                             (rc ** 2.0d0) + cutoff_fxn_prime(Rij, rc, &
                             cutofffn_code)
                         endif
 
-                        ridge = ridge + exp(- g_eta * (Rij**2.0d0) / &
+                        ridge = ridge + exp(- g_eta * ((Rij - center)**2.0d0) / &
                         (rc ** 2.0d0)) * term1 * dRijdRml
                     end if
                   end if

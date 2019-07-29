@@ -164,8 +164,8 @@ class Gaussian(object):
             log('{} feature vector functions:'.format(element))
             for index, fp in enumerate(fingerprints):
                 if fp['type'] == 'G2':
-                    log(' {}: {}, {}, eta = {}'
-                        .format(index, fp['type'], fp['element'], fp['eta']))
+                    log(' {}: {}, {}, eta = {}, center = {}'
+                        .format(index, fp['type'], fp['element'], fp['eta'], fp['center']))
                 elif fp['type'] == 'G4':
                     log(' {}: {}, ({}, {}), eta={}, gamma={}, zeta={}'
                         .format(index, fp['type'], fp['elements'][0],
@@ -352,7 +352,7 @@ class FingerprintCalculator:
 
             if G['type'] == 'G2':
                 ridge = calculate_G2(neighbornumbers, neighborsymbols, neighborpositions,
-                                     G['element'], G['eta'],
+                                     G['element'], G['eta'], G['center'],
                                      self.globals.cutoff, Ri, self.fortran)
             elif G['type'] == 'G4':
                 ridge = calculate_G4(neighbornumbers, neighborsymbols, neighborpositions,
@@ -515,6 +515,7 @@ class FingerprintPrimeCalculator:
                     neighborpositions,
                     G['element'],
                     G['eta'],
+                    G['center'],
                     self.globals.cutoff,
                     index,
                     Rindex,
@@ -563,7 +564,7 @@ class FingerprintPrimeCalculator:
 # Auxiliary functions #########################################################
 
 
-def calculate_G2(neighbornumbers, neighborsymbols, neighborpositions, G_element, eta, cutoff, Ri, fortran):
+def calculate_G2(neighbornumbers, neighborsymbols, neighborpositions, G_element, eta, center, cutoff, Ri, fortran):
     """Calculate G2 symmetry function.
 
     Ideally this will not be used but will be a template for how to build the
@@ -617,6 +618,7 @@ def calculate_G2(neighbornumbers, neighborsymbols, neighborpositions, G_element,
                     neighborpositions=neighborpositions,
                     g_number=G_number,
                     g_eta=eta,
+                    center=center,
                     rc=Rc,
                     cutofffn_code=cutofffn_code,
                     ri=Ri
@@ -639,7 +641,7 @@ def calculate_G2(neighbornumbers, neighborsymbols, neighborpositions, G_element,
                 args_cutoff_fxn = dict(Rij=Rij)
                 if cutoff['name'] == 'Polynomial':
                     args_cutoff_fxn['gamma'] = cutoff['kwargs']['gamma']
-                ridge += (np.exp(-eta * (Rij ** 2.) / (Rc ** 2.)) *
+                ridge += (np.exp(-eta * ((Rij - center) ** 2.) / (Rc ** 2.)) *
                           cutoff_fxn(**args_cutoff_fxn))
     return ridge
 
@@ -861,7 +863,7 @@ def calculate_G5(neighbornumbers, neighborsymbols, neighborpositions,
         return ridge
 
 
-def make_symmetry_functions(elements, type, etas, zetas=None, gammas=None):
+def make_symmetry_functions(elements, type, etas, centers=None, zetas=None, gammas=None):
     """Helper function to create Gaussian symmetry functions.
     Returns a list of dictionaries with symmetry function parameters
     in the format expected by the Gaussian class.
@@ -887,8 +889,10 @@ def make_symmetry_functions(elements, type, etas, zetas=None, gammas=None):
         parameters.
     """
     if type == 'G2':
-        G = [{'type': 'G2', 'element': element, 'eta': eta}
-             for eta in etas
+        if centers is None:
+            centers = np.zeros(len(etas))
+        G = [{'type': 'G2', 'element': element, 'eta': eta, 'center': center}
+             for (eta, center) in zip(etas, centers)
              for element in elements]
         return G
     elif type == 'G4':
@@ -940,7 +944,8 @@ def make_default_symmetry_functions(elements):
     for element in elements:
         # Radial symmetry functions.
         etas = np.logspace(np.log10(0.05), np.log10(5.), num=4)
-        _G = make_symmetry_functions(type='G2', etas=etas, elements=elements)
+        centers = np.zeros(len(etas))
+        _G = make_symmetry_functions(type='G2', etas=etas, centers=centers, elements=elements)
         # Angular symmetry functions.
         _G += make_symmetry_functions(type='G4', etas=[0.005],
                                       zetas=[1., 4.], gammas=[+1., -1.],
@@ -1101,7 +1106,7 @@ def dCos_theta_ijk_dR_ml(i, j, k, Ri, Rj, Rk, m, l):
 
 
 def calculate_G2_prime(neighborindices, neighbornumbers, neighborsymbols, neighborpositions,
-                       G_element, eta, cutoff,
+                       G_element, eta, center, cutoff,
                        i, Ri, m, l, fortran):
     """Calculates coordinate derivative of G2 symmetry function for atom at
     index i and position Ri with respect to coordinate x_{l} of atom index
@@ -1165,6 +1170,7 @@ def calculate_G2_prime(neighborindices, neighbornumbers, neighborsymbols, neighb
                     neighborpositions=neighborpositions,
                     g_number=G_number,
                     g_eta=eta,
+                    center=center,
                     rc=Rc,
                     cutofffn_code=cutofffn_code,
                     i=i,
@@ -1192,10 +1198,10 @@ def calculate_G2_prime(neighborindices, neighbornumbers, neighborsymbols, neighb
                     args_cutoff_fxn = dict(Rij=Rij)
                     if cutoff['name'] == 'Polynomial':
                         args_cutoff_fxn['gamma'] = cutoff['kwargs']['gamma']
-                    term1 = (-2. * eta * Rij * cutoff_fxn(**args_cutoff_fxn) /
+                    term1 = (-2. * eta * (Rij - center) * cutoff_fxn(**args_cutoff_fxn) /
                              (Rc ** 2.) +
                              cutoff_fxn.prime(**args_cutoff_fxn))
-                    ridge += np.exp(- eta * (Rij ** 2.) / (Rc ** 2.)) * \
+                    ridge += np.exp(- eta * ((Rij - center) ** 2.) / (Rc ** 2.)) * \
                         term1 * dRijdRml
 
     return ridge
