@@ -637,16 +637,17 @@ def calculate_rmses(calc_path,
         force_rmse += np.sum((force_amp[i] - force_exact[i]) ** 2)
 
     energy_rmse = np.sqrt(energy_rmse / num_images)
-    force_rmse = np.sqrt(force_rmse / (num_images * num_atoms))
+    force_rmse = np.sqrt(force_rmse / (num_images * 3 * num_atoms))
 
     return energy_rmse, force_rmse
 
 
 def calculate_error(calc_path,
                     images,
+                    label=None,
                     dblabel=None,
                     ):
-    calc = Amp.load(calc_path, dblabel=dblabel)
+    calc = Amp.load(calc_path, label=label, dblabel=dblabel)
     calc._log('\nAmp calculate_error started. ' + now() + '\n')
     calc._log('Descriptor: %s' % calc.descriptor.__class__.__name__)
     calc._log('Model: %s' % calc.model.__class__.__name__)
@@ -694,7 +695,7 @@ def calculate_error(calc_path,
         force_rmse += np.sum((force_amp[i] - force_exact[i]) ** 2)
 
     energy_rmse = np.sqrt(energy_rmse / num_images)
-    force_rmse = np.sqrt(force_rmse / (num_images * num_atoms))
+    force_rmse = np.sqrt(force_rmse / (num_images * 3 * num_atoms))
     force_exact = force_exact.reshape(-1)
     force_diff = force_diff.reshape(-1)
 
@@ -707,6 +708,51 @@ def calculate_error(calc_path,
         force_diff,
     )
 
+def calculate_energy_diff(calc_path,
+                    images,
+                    dblabel=None,
+                    ):
+    calc = Amp.load(calc_path, dblabel=dblabel)
+    calc._log('\nAmp calculate_energy_diff started. ' + now() + '\n')
+    calc._log('Descriptor: %s' % calc.descriptor.__class__.__name__)
+    calc._log('Model: %s' % calc.model.__class__.__name__)
+
+    images = hash_images(images, log=calc._log)
+
+    calc._log('\nDescriptor\n==========')
+    calc.descriptor.calculate_fingerprints(
+        images=images,
+        parallel=calc._parallel,
+        log=calc._log,
+        calculate_derivatives=False)
+
+    keys = list(images.keys())
+    num_images = len(images)
+    num_atoms = len(images[keys[0]])
+    energy_exact = np.zeros(num_images)
+    energy_amp = np.zeros(num_images)
+    energy_diff = np.zeros(num_images)
+
+    energy_rmse = 0.0
+    for i, (hash, image) in enumerate(images.items()):
+        energy_args = dict(
+            fingerprints=calc.descriptor.fingerprints[hash]
+        )
+
+        energy_amp[i] = calc.model.calculate_energy(**energy_args)
+        energy_exact[i] = image.get_potential_energy(apply_constraint=False)
+        energy_diff[i] = abs(energy_amp[i] - energy_exact[i])
+
+        energy_rmse += np.sum((energy_amp[i] - energy_exact[i]) ** 2)
+
+    energy_rmse = np.sqrt(energy_rmse / num_images)
+
+    return (
+        energy_rmse,
+        energy_exact,
+        energy_diff,
+        images,
+    )
 
 def read_trainlog(logfile, verbose=True, multiple=0):
     """Reads the log file from the training process, returning the relevant
