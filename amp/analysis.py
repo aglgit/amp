@@ -590,10 +590,11 @@ def calc_rmse(calc_paths,
 
 def calculate_rmses(calc_path,
                images,
+               label=None,
                dblabel=None,
               ):
 
-    calc = Amp.load(calc_path, dblabel=dblabel)
+    calc = Amp.load(calc_path, label=label, dblabel=dblabel)
     calc._log('\nAmp calculate_rmses started. ' + now() + '\n')
     calc._log('Descriptor: %s' % calc.descriptor.__class__.__name__)
     calc._log('Model: %s' % calc.model.__class__.__name__)
@@ -710,9 +711,10 @@ def calculate_error(calc_path,
 
 def calculate_energy_diff(calc_path,
                     images,
+                    label=None,
                     dblabel=None,
                     ):
-    calc = Amp.load(calc_path, dblabel=dblabel)
+    calc = Amp.load(calc_path, label=label, dblabel=dblabel)
     calc._log('\nAmp calculate_energy_diff started. ' + now() + '\n')
     calc._log('Descriptor: %s' % calc.descriptor.__class__.__name__)
     calc._log('Model: %s' % calc.model.__class__.__name__)
